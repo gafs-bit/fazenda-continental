@@ -41,11 +41,13 @@ pip install -r requirements.txt
 
 ## Re-running the pipeline
 
-The load scripts (`load_pesagem_csv.py`, `load_fretes_xlsx.py`) use
-`if_exists="append"` — do NOT re-run them against data already loaded into
-`gbrain_dev`, or rows will duplicate. `generate_gbrain_pages.py` is safe to
-re-run any time (overwrites by filename) and should be followed by
-`gbrain import ~/gbrain-farm-pages` to re-embed anything new.
+All three scripts are safe to re-run against the same or updated data. The
+loaders (`load_pesagem_csv.py`, `load_fretes_xlsx.py`) upsert on a natural
+key (`numero_romaneio` for pesagens, `local` for fretes_colheita) via
+`db_upsert.py` — re-running against a file with rows already in Postgres
+updates them in place instead of duplicating. `generate_gbrain_pages.py` is
+always safe to re-run (overwrites by filename). Follow up with
+`gbrain import ~/gbrain-farm-pages` to re-embed anything new/changed.
 
 See `CLAUDE.md` for the rule on always using the gbrain MCP tool (never raw
 SQL) to answer questions about this data, and `docs/USAGE.md` for how an

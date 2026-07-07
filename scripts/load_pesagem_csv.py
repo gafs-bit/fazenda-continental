@@ -12,12 +12,13 @@ Source format notes (as exported by the farm's system):
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+
+from db_upsert import ensure_unique_constraint, upsert_dataframe
 
 DEFAULT_DB_URL = "postgresql+psycopg2://localhost/gbrain_dev"
 
@@ -125,7 +126,9 @@ def load_csv(csv_path: Path) -> pd.DataFrame:
     quality_params = raw.apply(build_quality_params, axis=1)
 
     df = raw.rename(columns=COLUMN_MAP)[list(COLUMN_MAP.values())].copy()
-    df["parametros_qualidade"] = quality_params.apply(lambda d: json.dumps(d, ensure_ascii=False))
+    # Keep as a raw dict, NOT json.dumps'd -- the JSONB upsert path serializes
+    # this itself; pre-serializing here would double-encode it (see db_upsert.py).
+    df["parametros_qualidade"] = quality_params
 
     for col in WEIGHT_COLUMNS:
         df[col] = df[col].apply(parse_br_number)
@@ -162,9 +165,10 @@ def main():
     engine = create_engine(args.db_url)
     with engine.begin() as conn:
         conn.execute(text(CREATE_TABLE_SQL))
+        ensure_unique_constraint(conn, "pesagens", "numero_romaneio", "pesagens_numero_romaneio_key")
 
-    df.to_sql("pesagens", engine, if_exists="append", index=False, method="multi", chunksize=200)
-    print(f"Loaded {len(df)} rows into 'pesagens' in {args.db_url}")
+    n = upsert_dataframe(engine, "pesagens", df, conflict_column="numero_romaneio")
+    print(f"Upserted {n} rows into 'pesagens' (matched on numero_romaneio) in {args.db_url}")
 
 
 if __name__ == "__main__":

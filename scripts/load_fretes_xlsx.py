@@ -9,6 +9,8 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from db_upsert import ensure_unique_constraint, upsert_dataframe
+
 DEFAULT_DB_URL = "postgresql+psycopg2://localhost/gbrain_dev"
 
 COLUMN_MAP = {
@@ -55,9 +57,10 @@ def main():
     engine = create_engine(args.db_url)
     with engine.begin() as conn:
         conn.execute(text(CREATE_TABLE_SQL))
+        ensure_unique_constraint(conn, "fretes_colheita", "local", "fretes_colheita_local_key")
 
-    df.to_sql("fretes_colheita", engine, if_exists="append", index=False, method="multi")
-    print(f"Loaded {len(df)} rows into 'fretes_colheita' in {args.db_url}")
+    n = upsert_dataframe(engine, "fretes_colheita", df, conflict_column="local")
+    print(f"Upserted {n} rows into 'fretes_colheita' (matched on local) in {args.db_url}")
 
 
 if __name__ == "__main__":
