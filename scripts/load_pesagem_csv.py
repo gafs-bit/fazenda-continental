@@ -131,7 +131,17 @@ def load_csv(csv_path: Path) -> pd.DataFrame:
         df[col] = df[col].apply(parse_br_number)
 
     for col in DATE_COLUMNS:
-        df[col] = pd.to_datetime(df[col], format="%d/%m/%Y %H:%M", errors="coerce")
+        parsed = pd.to_datetime(df[col], format="%d/%m/%Y %H:%M", errors="coerce")
+        bad = parsed.isna() & df[col].notna()
+        if bad.any():
+            romaneios = df.loc[bad, "numero_romaneio"].tolist()
+            print(
+                f"WARNING: {bad.sum()} row(s) had an unparseable '{col}' value "
+                f"(expected dd/mm/yyyy HH:MM) and were set to null. "
+                f"Affected numero_romaneio: {romaneios}",
+                file=sys.stderr,
+            )
+        df[col] = parsed
 
     df["source_file"] = csv_path.name
     return df

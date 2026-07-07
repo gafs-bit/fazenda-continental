@@ -17,6 +17,7 @@ the same sensitivity class as data/ (gitignored in this repo). Do not point
 import argparse
 import json
 import re
+import sys
 import unicodedata
 from pathlib import Path
 
@@ -65,9 +66,12 @@ def pesagem_page(row) -> tuple[str, dict, str]:
     produto = (row.produto or "").strip()
     motorista = (row.nome_motorista or "").strip()
     chegada = row.data_chegada
+    chegada_known = pd.notna(chegada)
+    chegada_str = f"{chegada:%d/%m/%Y %H:%M}" if chegada_known else "data desconhecida"
+    chegada_date_str = f"{chegada:%d/%m/%Y}" if chegada_known else "data desconhecida"
 
     body_parts = [
-        f"Carga de {produto} entregue por {motorista} em {chegada:%d/%m/%Y %H:%M}.",
+        f"Carga de {produto} entregue por {motorista} em {chegada_str}.",
         f"Romaneio {row.numero_romaneio}, placa {row.placa}, tipo de pesagem {row.tipo_pesagem}.",
         f"Peso bruto {row.peso_bruto_kg:.0f} kg, peso tara {row.peso_tara_kg:.0f} kg, "
         f"peso líquido úmido {row.peso_liquido_umido_kg:.0f} kg, "
@@ -86,7 +90,7 @@ def pesagem_page(row) -> tuple[str, dict, str]:
 
     body = " ".join(body_parts)
 
-    title = f"Pesagem {row.numero_romaneio} — {produto} ({chegada:%d/%m/%Y})"
+    title = f"Pesagem {row.numero_romaneio} — {produto} ({chegada_date_str})"
     tags = ["pesagem", slugify(produto), row.tipo_pesagem.lower() if row.tipo_pesagem else "pesagem"]
 
     frontmatter = {
@@ -94,8 +98,9 @@ def pesagem_page(row) -> tuple[str, dict, str]:
         "title": title,
         "tags": tags,
         "id": f"pesagem-{row.id}",
-        "date": chegada.strftime("%Y-%m-%d"),
     }
+    if chegada_known:
+        frontmatter["date"] = chegada.strftime("%Y-%m-%d")
 
     filename = f"pesagem-{row.id:04d}-{slugify(motorista)}.md"
     return filename, frontmatter, body
@@ -148,20 +153,31 @@ def main():
     fretes_dir = args.output_dir / "fretes"
 
     n_pesagens = 0
+    skipped = []
     for row in pesagens.itertuples():
-        filename, frontmatter, body = pesagem_page(row)
-        write_page(pesagens_dir, filename, frontmatter, body)
-        n_pesagens += 1
+        try:
+            filename, frontmatter, body = pesagem_page(row)
+            write_page(pesagens_dir, filename, frontmatter, body)
+            n_pesagens += 1
+        except Exception as e:
+            skipped.append(("pesagem", row.id, e))
+            print(f"WARNING: skipped pesagem id={row.id} due to {e!r}", file=sys.stderr)
 
     n_fretes = 0
     for row in fretes.itertuples():
-        filename, frontmatter, body = frete_page(row)
-        write_page(fretes_dir, filename, frontmatter, body)
-        n_fretes += 1
+        try:
+            filename, frontmatter, body = frete_page(row)
+            write_page(fretes_dir, filename, frontmatter, body)
+            n_fretes += 1
+        except Exception as e:
+            skipped.append(("frete", row.id, e))
+            print(f"WARNING: skipped frete id={row.id} due to {e!r}", file=sys.stderr)
 
     print(f"Wrote {n_pesagens} pesagem pages to {pesagens_dir}")
     print(f"Wrote {n_fretes} frete pages to {fretes_dir}")
     print(f"Total: {n_pesagens + n_fretes} pages in {args.output_dir}")
+    if skipped:
+        print(f"Skipped {len(skipped)} row(s) due to errors: {skipped}", file=sys.stderr)
 
 
 if __name__ == "__main__":
