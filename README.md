@@ -24,7 +24,10 @@ gbrain (query via the gbrain MCP tool)
 - `data/` — raw farm exports (gitignored — see `.gitignore`; same PII
   sensitivity as the generated pages: driver names, plates, client/document
   numbers)
-- `scripts/` — the three pipeline scripts above
+- `scripts/` — the pipeline scripts, plus `db_upsert.py` (shared upsert
+  helper) and `logging_setup.py` (shared logging config)
+- `logs/` — `pipeline.log`, a chronological record of every script run
+  (gitignored — same PII sensitivity as `data/`)
 - `docs/` — extended documentation (see `docs/USAGE.md`)
 - `notes/` — internship journal carried over from the original repo
 - `requirements.txt` — pinned Python deps for `scripts/`
@@ -53,3 +56,11 @@ See `CLAUDE.md` for the rule on always using the gbrain MCP tool (never raw
 SQL) to answer questions about this data, and `docs/USAGE.md` for how an
 answer actually gets made and how to phrase questions so gbrain reliably
 gets used.
+
+## Logging
+
+All three pipeline scripts log to both the console and `logs/pipeline.log`
+(via `scripts/logging_setup.py`), so a run's state — rows parsed/upserted,
+warnings (e.g. an unparseable date), errors, row counts at each stage — is
+recorded chronologically across scripts, not just visible while watching the
+terminal live.

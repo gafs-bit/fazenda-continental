@@ -10,8 +10,11 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 from db_upsert import ensure_unique_constraint, upsert_dataframe
+from logging_setup import get_logger
 
 DEFAULT_DB_URL = "postgresql+psycopg2://localhost/gbrain_dev"
+
+logger = get_logger("load_fretes_xlsx")
 
 COLUMN_MAP = {
     "Local": "local",
@@ -48,19 +51,26 @@ def main():
     parser.add_argument("--db-url", default=DEFAULT_DB_URL)
     args = parser.parse_args()
 
+    logger.info(f"Starting load: {args.xlsx_path}")
+
     if not args.xlsx_path.exists():
+        logger.error(f"File not found: {args.xlsx_path}")
         sys.exit(f"File not found: {args.xlsx_path}")
 
-    df = load_xlsx(args.xlsx_path)
-    print(f"Parsed {len(df)} rows from {args.xlsx_path.name}")
+    try:
+        df = load_xlsx(args.xlsx_path)
+        logger.info(f"Parsed {len(df)} rows from {args.xlsx_path.name}")
 
-    engine = create_engine(args.db_url)
-    with engine.begin() as conn:
-        conn.execute(text(CREATE_TABLE_SQL))
-        ensure_unique_constraint(conn, "fretes_colheita", "local", "fretes_colheita_local_key")
+        engine = create_engine(args.db_url)
+        with engine.begin() as conn:
+            conn.execute(text(CREATE_TABLE_SQL))
+            ensure_unique_constraint(conn, "fretes_colheita", "local", "fretes_colheita_local_key")
 
-    n = upsert_dataframe(engine, "fretes_colheita", df, conflict_column="local")
-    print(f"Upserted {n} rows into 'fretes_colheita' (matched on local) in {args.db_url}")
+        n = upsert_dataframe(engine, "fretes_colheita", df, conflict_column="local")
+        logger.info(f"Upserted {n} rows into 'fretes_colheita' (matched on local) in {args.db_url}")
+    except Exception:
+        logger.exception(f"Load failed for {args.xlsx_path}")
+        raise
 
 
 if __name__ == "__main__":

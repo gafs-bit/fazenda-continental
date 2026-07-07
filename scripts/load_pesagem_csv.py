@@ -19,8 +19,11 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 from db_upsert import ensure_unique_constraint, upsert_dataframe
+from logging_setup import get_logger
 
 DEFAULT_DB_URL = "postgresql+psycopg2://localhost/gbrain_dev"
+
+logger = get_logger("load_pesagem_csv")
 
 COLUMN_MAP = {
     "Lote": "lote",
@@ -138,11 +141,10 @@ def load_csv(csv_path: Path) -> pd.DataFrame:
         bad = parsed.isna() & df[col].notna()
         if bad.any():
             romaneios = df.loc[bad, "numero_romaneio"].tolist()
-            print(
-                f"WARNING: {bad.sum()} row(s) had an unparseable '{col}' value "
+            logger.warning(
+                f"{bad.sum()} row(s) had an unparseable '{col}' value "
                 f"(expected dd/mm/yyyy HH:MM) and were set to null. "
-                f"Affected numero_romaneio: {romaneios}",
-                file=sys.stderr,
+                f"Affected numero_romaneio: {romaneios}"
             )
         df[col] = parsed
 
@@ -156,19 +158,26 @@ def main():
     parser.add_argument("--db-url", default=DEFAULT_DB_URL, help="SQLAlchemy DB URL")
     args = parser.parse_args()
 
+    logger.info(f"Starting load: {args.csv_path}")
+
     if not args.csv_path.exists():
+        logger.error(f"File not found: {args.csv_path}")
         sys.exit(f"File not found: {args.csv_path}")
 
-    df = load_csv(args.csv_path)
-    print(f"Parsed {len(df)} rows from {args.csv_path.name}")
+    try:
+        df = load_csv(args.csv_path)
+        logger.info(f"Parsed {len(df)} rows from {args.csv_path.name}")
 
-    engine = create_engine(args.db_url)
-    with engine.begin() as conn:
-        conn.execute(text(CREATE_TABLE_SQL))
-        ensure_unique_constraint(conn, "pesagens", "numero_romaneio", "pesagens_numero_romaneio_key")
+        engine = create_engine(args.db_url)
+        with engine.begin() as conn:
+            conn.execute(text(CREATE_TABLE_SQL))
+            ensure_unique_constraint(conn, "pesagens", "numero_romaneio", "pesagens_numero_romaneio_key")
 
-    n = upsert_dataframe(engine, "pesagens", df, conflict_column="numero_romaneio")
-    print(f"Upserted {n} rows into 'pesagens' (matched on numero_romaneio) in {args.db_url}")
+        n = upsert_dataframe(engine, "pesagens", df, conflict_column="numero_romaneio")
+        logger.info(f"Upserted {n} rows into 'pesagens' (matched on numero_romaneio) in {args.db_url}")
+    except Exception:
+        logger.exception(f"Load failed for {args.csv_path}")
+        raise
 
 
 if __name__ == "__main__":

@@ -17,15 +17,18 @@ the same sensitivity class as data/ (gitignored in this repo). Do not point
 import argparse
 import json
 import re
-import sys
 import unicodedata
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine
 
+from logging_setup import get_logger
+
 DEFAULT_DB_URL = "postgresql+psycopg2://localhost/gbrain_dev"
 DEFAULT_OUTPUT_DIR = Path.home() / "gbrain-farm-pages"
+
+logger = get_logger("generate_gbrain_pages")
 
 
 def slugify(value: str) -> str:
@@ -141,6 +144,8 @@ def main():
     )
     args = parser.parse_args()
 
+    logger.info(f"Starting page generation: db={args.db_url} output_dir={args.output_dir}")
+
     engine = create_engine(args.db_url)
 
     pesagens = pd.read_sql("SELECT * FROM pesagens ORDER BY id", engine)
@@ -148,6 +153,7 @@ def main():
         lambda v: json.loads(v) if isinstance(v, str) else (v or {})
     )
     fretes = pd.read_sql("SELECT * FROM fretes_colheita ORDER BY id", engine)
+    logger.info(f"Read {len(pesagens)} pesagens rows, {len(fretes)} fretes_colheita rows")
 
     pesagens_dir = args.output_dir / "pesagens"
     fretes_dir = args.output_dir / "fretes"
@@ -161,7 +167,7 @@ def main():
             n_pesagens += 1
         except Exception as e:
             skipped.append(("pesagem", row.id, e))
-            print(f"WARNING: skipped pesagem id={row.id} due to {e!r}", file=sys.stderr)
+            logger.warning(f"Skipped pesagem id={row.id} due to {e!r}")
 
     n_fretes = 0
     for row in fretes.itertuples():
@@ -171,13 +177,13 @@ def main():
             n_fretes += 1
         except Exception as e:
             skipped.append(("frete", row.id, e))
-            print(f"WARNING: skipped frete id={row.id} due to {e!r}", file=sys.stderr)
+            logger.warning(f"Skipped frete id={row.id} due to {e!r}")
 
-    print(f"Wrote {n_pesagens} pesagem pages to {pesagens_dir}")
-    print(f"Wrote {n_fretes} frete pages to {fretes_dir}")
-    print(f"Total: {n_pesagens + n_fretes} pages in {args.output_dir}")
+    logger.info(f"Wrote {n_pesagens} pesagem pages to {pesagens_dir}")
+    logger.info(f"Wrote {n_fretes} frete pages to {fretes_dir}")
+    logger.info(f"Total: {n_pesagens + n_fretes} pages in {args.output_dir}")
     if skipped:
-        print(f"Skipped {len(skipped)} row(s) due to errors: {skipped}", file=sys.stderr)
+        logger.warning(f"Skipped {len(skipped)} row(s) due to errors: {skipped}")
 
 
 if __name__ == "__main__":

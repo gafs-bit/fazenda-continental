@@ -11,6 +11,9 @@ venv/
 data/*
 !data/.gitkeep
 
+# Logs (same PII sensitivity as data/ -- can contain driver names, romaneio numbers)
+logs/
+
 # Editors
 .vscode/
 .idea/
