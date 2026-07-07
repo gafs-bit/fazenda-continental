@@ -25,7 +25,19 @@ gbrain (query via the gbrain MCP tool)
   sensitivity as the generated pages: driver names, plates, client/document
   numbers)
 - `scripts/` — the three pipeline scripts above
+- `docs/` — extended documentation (see `docs/USAGE.md`)
 - `notes/` — internship journal carried over from the original repo
+- `requirements.txt` — pinned Python deps for `scripts/`
+- `CLAUDE.md` — behavior rules for Claude Code sessions in this repo (no SQL
+  fallback, always use the gbrain MCP tool)
+
+## Setup
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
 ## Re-running the pipeline
 
@@ -36,5 +48,6 @@ re-run any time (overwrites by filename) and should be followed by
 `gbrain import ~/gbrain-farm-pages` to re-embed anything new.
 
 See `CLAUDE.md` for the rule on always using the gbrain MCP tool (never raw
-SQL) to answer questions about this data, and `USAGE.md` for how an answer
-actually gets made and how to phrase questions so gbrain reliably gets used.
+SQL) to answer questions about this data, and `docs/USAGE.md` for how an
+answer actually gets made and how to phrase questions so gbrain reliably
+gets used.
