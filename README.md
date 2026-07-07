@@ -36,4 +36,5 @@ re-run any time (overwrites by filename) and should be followed by
 `gbrain import ~/gbrain-farm-pages` to re-embed anything new.
 
 See `CLAUDE.md` for the rule on always using the gbrain MCP tool (never raw
-SQL) to answer questions about this data.
+SQL) to answer questions about this data, and `USAGE.md` for how an answer
+actually gets made and how to phrase questions so gbrain reliably gets used.
