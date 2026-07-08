@@ -8,8 +8,14 @@ Pipeline (per question):
           contradicts the data. Returns PASS or FAIL:<reason>.
 
 The gbrain / farm-stats / gbrain-search-safe MCP servers are registered in
-~/.hermes/config.yaml with read-only tools.include allowlists, so Hermes can
-only ever READ farm data — it has no write/SQL tools available. The
+~/.hermes/config.yaml with read-only tools.include allowlists -- but that
+alone does NOT restrict Hermes's own built-in toolsets (terminal, file,
+code_execution, browser, cronjob, computer_use, delegation, etc.), which are
+enabled by default and give Hermes real shell/file access regardless of how
+narrow the MCP servers are (confirmed by actually testing it: an
+unrestricted `hermes chat` call executed an arbitrary shell command and
+wrote a real file). `-t gbrain,farm-stats,gbrain-search-safe` on every call
+below is what actually disables everything else -- do not remove it. The
 farm-telegram skill enforces the citation contract + grounding rule, which
 Pass 2 relies on to catch misattribution.
 
@@ -44,6 +50,8 @@ async def _hermes_chat(question: str, extra_args: list[str]) -> str:
         question,
         "-s",
         "farm-telegram",
+        "-t",
+        "gbrain,farm-stats,gbrain-search-safe",
         "-Q",
         "--source",
         "telegram",
