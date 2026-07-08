@@ -19,6 +19,11 @@ gbrain_dev Postgres: pesagens, fretes_colheita tables
 gbrain (query via the gbrain MCP tool)
 ```
 
+`mcp_server/farm_stats.py` reads the same `gbrain_dev` Postgres tables
+directly (not via gbrain) to answer count/sum/average/min/max questions
+gbrain's search can't answer reliably — registered as the `farm-stats` MCP
+server; see CLAUDE.md for when to use which.
+
 ## Structure
 
 - `data/` — raw farm exports (gitignored — see `.gitignore`; same PII
@@ -26,13 +31,17 @@ gbrain (query via the gbrain MCP tool)
   numbers)
 - `scripts/` — the pipeline scripts, plus `db_upsert.py` (shared upsert
   helper) and `logging_setup.py` (shared logging config)
+- `mcp_server/` — `farm_stats.py`, the `farm-stats` MCP server (aggregate
+  queries direct from Postgres), plus `serve.sh` (the registered launch
+  wrapper — resolves paths from its own location so cwd doesn't matter)
 - `logs/` — `pipeline.log`, a chronological record of every script run
   (gitignored — same PII sensitivity as `data/`)
 - `docs/` — extended documentation (see `docs/USAGE.md`)
 - `notes/` — internship journal carried over from the original repo
-- `requirements.txt` — pinned Python deps for `scripts/`
-- `CLAUDE.md` — behavior rules for Claude Code sessions in this repo (no SQL
-  fallback, always use the gbrain MCP tool)
+- `requirements.txt` — pinned Python deps for `scripts/` (Python 3.9 venv)
+- `.mcp.json` — registers the `farm-stats` MCP server for this project
+- `CLAUDE.md` — behavior rules for Claude Code sessions in this repo (no
+  ad-hoc SQL fallback; gbrain for content, farm-stats for aggregates)
 
 ## Setup
 
@@ -40,6 +49,15 @@ gbrain (query via the gbrain MCP tool)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+The `farm-stats` MCP server needs Python >=3.10 (the pipeline's own `.venv`
+is 3.9), so it runs in a separate venv:
+
+```
+python3.12 -m venv .venv-mcp
+source .venv-mcp/bin/activate
+pip install -r mcp_server/requirements.txt
 ```
 
 ## Re-running the pipeline

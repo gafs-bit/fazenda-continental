@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "farm-stats": {
+      "type": "stdio",
+      "command": "/Users/giacomosantos/fazenda-continental-data/mcp_server/serve.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

@@ -5,6 +5,7 @@
 __pycache__/
 *.pyc
 .venv/
+.venv-mcp/
 venv/
 
 # Data (raw/sensitive farm data — keep local unless you decide otherwise)
