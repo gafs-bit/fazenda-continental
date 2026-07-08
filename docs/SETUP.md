@@ -31,44 +31,41 @@ git clone git@gitlab.com:guac-co-group/fazenda-continental.git
 cd fazenda-continental
 ```
 
-**1. Pipeline venv** (Python 3.9, for the loader/adapter scripts):
+**1. Run the setup script.** `scripts/setup.sh` chains everything below that
+can actually be automated — checks prerequisites are on PATH, creates the
+three venvs and installs their deps, checks/creates the `gbrain_dev`
+database, and (if it finds files already in `data/`) runs the loaders +
+`generate_gbrain_pages.py` + `gbrain import` for you. Safe to re-run.
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+./scripts/setup.sh
 ```
 
-**2. MCP server venv** (Python 3.12 — the `mcp` SDK needs >=3.10):
-```bash
-python3.12 -m venv .venv-mcp
-.venv-mcp/bin/pip install -r mcp_server/requirements.txt
-```
+**It deliberately does NOT:**
+- **Run `gbrain init` for you.** That's an interactive wizard asking for
+  your own API keys (ZeroEntropy/Anthropic/etc) — scripting blind execution
+  of a step that needs someone's secrets is the same mistake as hardcoding
+  a token. Run it yourself, once, in **Postgres/Supabase mode** — not
+  `--pglite` (gbrain's embedded, no-server mode): `farm-stats` connects to
+  the same Postgres database directly via `psycopg2`, which only works if
+  gbrain is actually running against a real Postgres server:
+  ```bash
+  gbrain init --url postgresql://localhost/gbrain_dev
+  ```
+- **Fetch or fabricate real farm data.** `data/*.csv`/`*.xlsx` are
+  gitignored on purpose (PII — driver names, plates, client documents). If
+  `data/` is empty when you run the script, it skips the load step and
+  tells you so. Drop your real GSB exports in and re-run.
+- **Install or vendor `gbrain` itself.** It's a separate, full application
+  by design — see its own docs on multi-project "company brain" deployments.
+  The script only checks it's on PATH and already initialized.
 
-**3. Telegram bot venv** (only if you're running the bot):
-```bash
-python3.12 -m venv .venv-bot
-.venv-bot/bin/pip install -r telegram_bot/requirements.txt
-```
-
-**4. Load real data.** Drop your GSB exports into `data/`, then, with the
-pipeline venv active:
-```bash
-python scripts/load_pesagem_csv.py data/your_pesagem_export.csv
-python scripts/load_fretes_xlsx.py data/your_fretes_export.xlsx
-python scripts/generate_gbrain_pages.py
-gbrain import ~/gbrain-farm-pages
-```
-The loaders upsert on a natural key, so re-running them against the same
-file is safe — but see the main `README.md`'s note on this before re-running
-against partially-overlapping exports.
-
-**5. Register the MCP servers.** `.mcp.json` is checked in and already
+**2. Register the MCP servers.** `.mcp.json` is checked in and already
 points at the right scripts using `${CLAUDE_PROJECT_DIR}`, so this works
 regardless of where you cloned the repo — nothing to edit. Start a Claude
 Code session in the repo root and run `/mcp` to confirm `farm-stats` and
 `gbrain-search-safe` both show as connected.
 
-**6. Telegram bot** (optional — only if you want the bot, not just
+**3. Telegram bot** (optional — only if you want the bot, not just
 interactive Claude Code access):
 ```bash
 cd telegram_bot

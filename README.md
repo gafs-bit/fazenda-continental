@@ -30,7 +30,8 @@ server; see CLAUDE.md for when to use which.
   sensitivity as the generated pages: driver names, plates, client/document
   numbers)
 - `scripts/` — the pipeline scripts, plus `db_upsert.py` (shared upsert
-  helper) and `logging_setup.py` (shared logging config)
+  helper), `logging_setup.py` (shared logging config), and `setup.sh`
+  (chains everything a fresh clone can automate — see `docs/SETUP.md`)
 - `mcp_server/` — `farm_stats.py`, the `farm-stats` MCP server (aggregate
   queries direct from Postgres), plus `gbrain_search_safe.py`, the
   `gbrain-search-safe` MCP server (wraps gbrain keyword search with an
