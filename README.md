@@ -47,15 +47,19 @@ server; see CLAUDE.md for when to use which.
 - `logs/` — `pipeline.log`, a chronological record of every script run
   (gitignored — same PII sensitivity as `data/`)
 - `docs/` — extended documentation: `docs/USAGE.md` (how to phrase
-  questions so gbrain reliably gets used) and `docs/SETUP.md` (getting a
-  fresh clone working end to end on a new machine)
+  questions so gbrain reliably gets used), `docs/SETUP.md` (getting a fresh
+  clone working end to end on a new machine), and `docs/AUDIT.md` (the
+  testing/evidence behind CLAUDE.md's tool-choice rules)
 - `notes/` — internship journal carried over from the original repo
 - `requirements.txt` — pinned Python deps for `scripts/` (Python 3.9 venv)
 - `.mcp.json` — registers the `farm-stats` and `gbrain-search-safe` MCP
   servers for this project
-- `CLAUDE.md` — behavior rules for Claude Code sessions in this repo (no
-  ad-hoc SQL fallback; gbrain-search-safe/gbrain-query for content,
-  farm-stats for aggregates)
+- `CLAUDE.md` — terse behavior rules for Claude Code sessions in this repo
+  (no ad-hoc SQL fallback; gbrain-search-safe/gbrain-query for content,
+  farm-stats for aggregates); see `docs/AUDIT.md` for why
+- `.claude/settings.json` — project-level permission denylist enforcing
+  two of CLAUDE.md's rules structurally (raw `gbrain search` and `psql`
+  via Bash), not just by instruction
 
 ## Setup
 

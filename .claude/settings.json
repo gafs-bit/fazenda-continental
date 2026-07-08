@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "deny": [
+      "mcp__gbrain__search",
+      "Bash(psql *)"
+    ]
+  }
+}
