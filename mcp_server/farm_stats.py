@@ -123,13 +123,16 @@ def pesagens_extremes(
     placa: Optional[str] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
-) -> list[dict]:
+) -> dict:
     """The N records with the highest/lowest value of a numeric pesagens
     field, with full context (romaneio, driver, plate, date, value) so the
     answer is independently checkable. Use this for "which load had the
     highest/lowest X" — gbrain's search tools were found wrong 4 times out
     of 5 on this exact question shape (they rank by semantic similarity,
-    not numeric value)."""
+    not numeric value). Returns {"match_found": false, "message": ...} if
+    the driver/plate/date filter matches no rows, instead of a bare empty
+    list that could be mistaken for "still loading" rather than "no such
+    record"."""
     col = PESAGEM_FIELDS[field]
     where, params = _pesagem_filters(nome_motorista, placa, since, until)
     where = where + (" AND " if where else " WHERE ") + f"{col} IS NOT NULL"
@@ -141,7 +144,13 @@ def pesagens_extremes(
     with _connect() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql, params + [n])
         rows = cur.fetchall()
-        return [dict(r) for r in rows]
+        if not rows:
+            return {
+                "match_found": False,
+                "message": "No pesagens records match nome_motorista="
+                f"{nome_motorista!r}, placa={placa!r}, since={since!r}, until={until!r}.",
+            }
+        return {"match_found": True, "results": [dict(r) for r in rows]}
 
 
 @mcp.tool()
@@ -160,10 +169,12 @@ def pesagens_group_counts(
     limit: int = 20,
     since: Optional[str] = None,
     until: Optional[str] = None,
-) -> list[dict]:
+) -> dict:
     """Load counts grouped by driver or plate, ordered highest first. Use
     this for "who made the most loads" or "which plate was used most" —
-    gbrain's search tools cannot rank/count across the full corpus."""
+    gbrain's search tools cannot rank/count across the full corpus. Returns
+    {"match_found": false, "message": ...} if the date range matches no
+    rows, instead of a bare empty list."""
     where, params = _pesagem_filters(None, None, since, until)
     sql = (
         f"SELECT {group_by} AS value, COUNT(*) AS n FROM pesagens{where} "
@@ -171,7 +182,13 @@ def pesagens_group_counts(
     )
     with _connect() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql, params + [limit])
-        return [dict(r) for r in cur.fetchall()]
+        rows = cur.fetchall()
+        if not rows:
+            return {
+                "match_found": False,
+                "message": f"No pesagens records match since={since!r}, until={until!r}.",
+            }
+        return {"match_found": True, "results": [dict(r) for r in rows]}
 
 
 @mcp.tool()

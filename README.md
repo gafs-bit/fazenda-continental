@@ -32,16 +32,21 @@ server; see CLAUDE.md for when to use which.
 - `scripts/` — the pipeline scripts, plus `db_upsert.py` (shared upsert
   helper) and `logging_setup.py` (shared logging config)
 - `mcp_server/` — `farm_stats.py`, the `farm-stats` MCP server (aggregate
-  queries direct from Postgres), plus `serve.sh` (the registered launch
-  wrapper — resolves paths from its own location so cwd doesn't matter)
+  queries direct from Postgres), plus `gbrain_search_safe.py`, the
+  `gbrain-search-safe` MCP server (wraps gbrain keyword search with an
+  explicit no-match message — see CLAUDE.md). Each has its own `serve*.sh`
+  launch wrapper (resolves paths from its own location so cwd doesn't
+  matter)
 - `logs/` — `pipeline.log`, a chronological record of every script run
   (gitignored — same PII sensitivity as `data/`)
 - `docs/` — extended documentation (see `docs/USAGE.md`)
 - `notes/` — internship journal carried over from the original repo
 - `requirements.txt` — pinned Python deps for `scripts/` (Python 3.9 venv)
-- `.mcp.json` — registers the `farm-stats` MCP server for this project
+- `.mcp.json` — registers the `farm-stats` and `gbrain-search-safe` MCP
+  servers for this project
 - `CLAUDE.md` — behavior rules for Claude Code sessions in this repo (no
-  ad-hoc SQL fallback; gbrain for content, farm-stats for aggregates)
+  ad-hoc SQL fallback; gbrain-search-safe/gbrain-query for content,
+  farm-stats for aggregates)
 
 ## Setup
 

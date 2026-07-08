@@ -32,18 +32,29 @@ Two things are legitimate exceptions to "no raw SQL," and only these two:
   SQL executor. It exists precisely so nobody needs to improvise raw SQL
   for aggregate questions; reach for it, don't reinvent it.
 
-## Exact-ID / specific-record questions: use `search`, not `query`
+## Exact-ID / specific-record questions: use `gbrain-search-safe`, not raw `search`/`query`
 
 For any question naming a specific identifier — a Romaneio number, a placa,
-a Talhão/field code (BL.xxx, P.xx) — use gbrain's keyword `search` command,
-not the vector `query` command. A 20-question audit (2026-07-08) found
-`query`'s semantic ranking can bury the exact match under unrelated
-records with similar wording (e.g. querying for "Romaneio 15064" returned
-other romaneios in the top results, not 15064 itself), while `search`'s
-BM25 ranking puts the exact ID match first with a wide score gap
-(~0.83+ vs ~0.47 for everything else). Reserve `query` for genuinely fuzzy/
-semantic questions ("which field is near Frutal", "loads with high
-moisture").
+a Talhão/field code (BL.xxx, P.xx) — use the `gbrain-search-safe` MCP tool's
+`search_with_fallback` (keyword search), not gbrain's own `search`/`query`
+tools directly. A 20-question audit (2026-07-08) found `query`'s semantic
+ranking can bury the exact match under unrelated records with similar
+wording (e.g. querying for "Romaneio 15064" returned other romaneios in the
+top results, not 15064 itself). Further testing the same day found that
+gbrain's raw `search` tool, called directly, is *worse* than that audit
+suggested: for an ID that doesn't exist anywhere in the data (e.g. "Romaneio
+99999", a nonexistent placa), it still returns several results tagged
+`"evidence": "keyword_exact"` with high scores (~0.80+) and no signal that
+nothing actually matched — confirmed reproducible, and confirmed *not* a
+gbrain search-engine bug: `gbrain call search` (the same underlying tool via
+the local CLI path) correctly returns `[]` for the identical query. The
+fault is in the MCP tool wiring for this session specifically.
+`gbrain-search-safe` routes through that reliable CLI path and returns
+`{"match_found": false, "message": ...}` instead of fabricated hits — use it
+for every exact-ID lookup. Reserve gbrain's own `query` tool for genuinely
+fuzzy/semantic questions with no exact identifier ("which field is near
+Frutal", "loads with high moisture"), and treat its results with the same
+verify-before-answering caution described below.
 
 ## Verify before answering — never present the closest hit as the answer
 
@@ -73,6 +84,12 @@ ranked result list. Tools: `pesagens_count`, `pesagens_aggregate`,
 arguments are fixed enums the tool defines — there is no way to pass
 arbitrary SQL through it, so using it is not the same thing as the banned
 ad-hoc SQL fallback above.
+
+`pesagens_extremes` and `pesagens_group_counts` return
+`{"match_found": true, "results": [...]}` or `{"match_found": false,
+"message": ...}` — check `match_found` rather than treating an empty list
+as ambiguous. `pesagens_count` / `pesagens_aggregate` / `fretes_aggregate`
+are unchanged (`0`/`None` are already unambiguous for those).
 
 Rule of thumb: gbrain answers "what/which/tell me about" questions about
 specific records or fuzzy topics; farm-stats answers "how many/what's the
