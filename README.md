@@ -37,6 +37,12 @@ server; see CLAUDE.md for when to use which.
   explicit no-match message — see CLAUDE.md). Each has its own `serve*.sh`
   launch wrapper (resolves paths from its own location so cwd doesn't
   matter)
+- `telegram_bot/` — `bot.py`, a Telegram front-end that answers each
+  message by running `claude -p` from the repo root (so CLAUDE.md's rules
+  and the MCP tools above apply automatically); allowlisted Telegram user
+  IDs only, since the data is PII-sensitive. `run.sh` is the launcher;
+  copy `.env.example` to `.env` (gitignored) and fill in the bot token —
+  see CLAUDE.md for how to get one
 - `logs/` — `pipeline.log`, a chronological record of every script run
   (gitignored — same PII sensitivity as `data/`)
 - `docs/` — extended documentation (see `docs/USAGE.md`)

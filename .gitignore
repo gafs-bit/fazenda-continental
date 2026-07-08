@@ -6,7 +6,11 @@ __pycache__/
 *.pyc
 .venv/
 .venv-mcp/
+.venv-bot/
 venv/
+
+# Telegram bot secrets (token, allowlist) — never commit
+telegram_bot/.env
 
 # Data (raw/sensitive farm data — keep local unless you decide otherwise)
 data/*
