@@ -45,7 +45,9 @@ server; see CLAUDE.md for when to use which.
   see CLAUDE.md for how to get one
 - `logs/` — `pipeline.log`, a chronological record of every script run
   (gitignored — same PII sensitivity as `data/`)
-- `docs/` — extended documentation (see `docs/USAGE.md`)
+- `docs/` — extended documentation: `docs/USAGE.md` (how to phrase
+  questions so gbrain reliably gets used) and `docs/SETUP.md` (getting a
+  fresh clone working end to end on a new machine)
 - `notes/` — internship journal carried over from the original repo
 - `requirements.txt` — pinned Python deps for `scripts/` (Python 3.9 venv)
 - `.mcp.json` — registers the `farm-stats` and `gbrain-search-safe` MCP
