@@ -75,33 +75,20 @@ averages by driver, plate, or date; specific romaneio/placa/talhão lookups) \
 Answer in the same language the question was asked in."""
 
 
+# Backend swapped from `claude -p` to Hermes: same contract (question -> answer
+# string), but Hermes reads the gbrain/farm-stats MCP allowlists from its own
+# config and the farm-telegram skill for presentation rules, so ALLOWED_TOOLS /
+# TELEGRAM_SYSTEM_PROMPT are no longer needed here. See ask_hermes.py.
+import sys
+
+if REPO_DIR not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+from telegram_bot.ask_hermes import ask_hermes_verified as _ask_hermes_verified  # noqa: E402,F401
+
+# Backend-backed alias kept for any remaining call sites.
 async def ask_claude(question: str) -> str:
-    proc = await asyncio.create_subprocess_exec(
-        "claude",
-        "-p",
-        question,
-        "--allowedTools",
-        ALLOWED_TOOLS,
-        "--append-system-prompt",
-        TELEGRAM_SYSTEM_PROMPT,
-        "--no-session-persistence",
-        cwd=str(REPO_DIR),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=CLAUDE_TIMEOUT_SECONDS
-        )
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
-        raise RuntimeError(f"claude did not respond within {CLAUDE_TIMEOUT_SECONDS}s")
-
-    if proc.returncode != 0:
-        raise RuntimeError(stderr.decode().strip() or "claude exited with an error")
-
-    return stdout.decode().strip()
+    answer, _ok, _reason = await _ask_hermes_verified(question)
+    return answer
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -126,10 +113,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await context.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
 
     try:
-        answer = await ask_claude(message.text)
+        answer, ok, reason = await _ask_hermes_verified(message.text)
     except RuntimeError as exc:
         logger.exception("Failed to answer question")
         await message.reply_text(f"Something went wrong answering that: {exc}")
+        return
+
+    # Two-pass self-check guard (B): withhold a contradicted answer rather
+    # than deliver a plausible-but-wrong figure to a non-technical reader.
+    if not ok:
+        logger.error("Self-check FAILED for %r: %s", message.text, reason)
+        await message.reply_text(
+            "I'm not confident enough in that answer to send it — the data "
+            "didn't check out on a second pass. Please rephrase or ask for a "
+            "specific romaneio/placa and I'll look it up directly."
+        )
         return
 
     if not answer:
