@@ -50,11 +50,19 @@ def _connect():
     return psycopg2.connect(DSN)
 
 
+POSSUI_ROMANEIO_TEXT = {
+    True: "A Pesagem possui Romaneio",
+    False: "A Pesagem não possui Romaneio",
+}
+
+
 def _pesagem_filters(
     nome_motorista: Optional[str],
     placa: Optional[str],
     since: Optional[str],
     until: Optional[str],
+    produto: Optional[str] = None,
+    possui_romaneio: Optional[bool] = None,
 ):
     conditions = []
     params: list = []
@@ -70,6 +78,12 @@ def _pesagem_filters(
     if until:
         conditions.append("data_chegada <= %s")
         params.append(until)
+    if produto:
+        conditions.append("produto = %s")
+        params.append(produto)
+    if possui_romaneio is not None:
+        conditions.append("possui_romaneio = %s")
+        params.append(POSSUI_ROMANEIO_TEXT[possui_romaneio])
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
     return where, params
 
@@ -80,12 +94,18 @@ def pesagens_count(
     placa: Optional[str] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
+    produto: Optional[str] = None,
+    possui_romaneio: Optional[bool] = None,
 ) -> int:
     """Exact row count in pesagens, optionally filtered by exact driver name,
-    exact plate, and/or date range (since/until as YYYY-MM-DD). Use this for
-    any "how many loads/records" question — gbrain's search tools cannot
-    count reliably (capped result lists, not a real count)."""
-    where, params = _pesagem_filters(nome_motorista, placa, since, until)
+    exact plate, date range (since/until as YYYY-MM-DD), exact crop/product
+    name (produto), and/or whether the weighing has a romaneio (possui_
+    romaneio). Use this for any "how many loads/records" question —
+    gbrain's search tools cannot count reliably (capped result lists, not a
+    real count)."""
+    where, params = _pesagem_filters(
+        nome_motorista, placa, since, until, produto, possui_romaneio
+    )
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM pesagens{where}", params)
         return cur.fetchone()[0]
@@ -99,15 +119,20 @@ def pesagens_aggregate(
     placa: Optional[str] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
+    produto: Optional[str] = None,
+    possui_romaneio: Optional[bool] = None,
 ) -> Optional[float]:
     """Exact sum/avg/min/max/count of a numeric pesagens field (weight in kg,
     or umidade_pct / impureza_pct), optionally filtered by exact driver name,
-    exact plate, and/or date range (since/until as YYYY-MM-DD). Use this for
-    any total/average/highest/lowest question — gbrain's query/search tools
-    rank by text similarity, not numeric value, and cannot answer these
-    reliably."""
+    exact plate, date range (since/until as YYYY-MM-DD), exact crop/product
+    name (produto), and/or whether the weighing has a romaneio (possui_
+    romaneio). Use this for any total/average/highest/lowest question —
+    gbrain's query/search tools rank by text similarity, not numeric value,
+    and cannot answer these reliably."""
     col = PESAGEM_FIELDS[field]
-    where, params = _pesagem_filters(nome_motorista, placa, since, until)
+    where, params = _pesagem_filters(
+        nome_motorista, placa, since, until, produto, possui_romaneio
+    )
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT {OP_SQL[op]}({col}) FROM pesagens{where}", params)
         result = cur.fetchone()[0]
@@ -123,18 +148,24 @@ def pesagens_extremes(
     placa: Optional[str] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
+    produto: Optional[str] = None,
+    possui_romaneio: Optional[bool] = None,
 ) -> dict:
     """The N records with the highest/lowest value of a numeric pesagens
     field, with full context (romaneio, driver, plate, date, value) so the
-    answer is independently checkable. Use this for "which load had the
-    highest/lowest X" — gbrain's search tools were found wrong 4 times out
-    of 5 on this exact question shape (they rank by semantic similarity,
-    not numeric value). Returns {"match_found": false, "message": ...} if
-    the driver/plate/date filter matches no rows, instead of a bare empty
+    answer is independently checkable. Optionally filtered by exact driver
+    name, exact plate, date range, exact crop/product name (produto), and/or
+    whether the weighing has a romaneio (possui_romaneio). Use this for
+    "which load had the highest/lowest X" — gbrain's search tools were found
+    wrong 4 times out of 5 on this exact question shape (they rank by
+    semantic similarity, not numeric value). Returns {"match_found": false,
+    "message": ...} if the filter matches no rows, instead of a bare empty
     list that could be mistaken for "still loading" rather than "no such
     record"."""
     col = PESAGEM_FIELDS[field]
-    where, params = _pesagem_filters(nome_motorista, placa, since, until)
+    where, params = _pesagem_filters(
+        nome_motorista, placa, since, until, produto, possui_romaneio
+    )
     where = where + (" AND " if where else " WHERE ") + f"{col} IS NOT NULL"
     order = "DESC" if direction == "max" else "ASC"
     sql = (

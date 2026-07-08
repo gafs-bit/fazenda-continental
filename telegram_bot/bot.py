@@ -55,6 +55,25 @@ ALLOWED_TOOLS = ",".join(
 
 TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
+# This is a one-shot message to a non-technical farm employee, not an
+# interactive dev session: they cannot reply mid-turn, and they should never
+# see tool names, file paths, code, or CLAUDE.md referenced directly.
+TELEGRAM_SYSTEM_PROMPT = """You are answering a single Telegram message from \
+a Fazenda Continental farm employee who is not a programmer. This is your \
+only chance to respond -- they cannot reply to a follow-up question, so \
+always give a final, direct answer instead of asking one.
+
+Never mention tool names, function names, file paths, line numbers, \
+CLAUDE.md, MCP, or any other implementation detail -- the reader has no \
+context for any of that and does not need it.
+
+If the current tools genuinely cannot answer the question, say so in one or \
+two plain sentences describing what you *can* look up instead (e.g. totals/\
+averages by driver, plate, or date; specific romaneio/placa/talhão lookups) \
+-- do not explain why in technical terms, and do not propose a code change.
+
+Answer in the same language the question was asked in."""
+
 
 async def ask_claude(question: str) -> str:
     proc = await asyncio.create_subprocess_exec(
@@ -63,6 +82,8 @@ async def ask_claude(question: str) -> str:
         question,
         "--allowedTools",
         ALLOWED_TOOLS,
+        "--append-system-prompt",
+        TELEGRAM_SYSTEM_PROMPT,
         "--no-session-persistence",
         cwd=str(REPO_DIR),
         stdout=asyncio.subprocess.PIPE,
