@@ -1,16 +1,18 @@
 """Telegram bot front-end for farm data Q&A.
 
-Each incoming message is answered by running `claude -p` from this repo's
-root, so it automatically picks up CLAUDE.md's rules and the farm-stats /
-gbrain / gbrain-search-safe MCP tools registered in .mcp.json — no
-query-routing logic is duplicated here. Access is restricted to an
-allowlist of Telegram user IDs since the underlying data contains driver
-names, plates, and client document numbers (see CLAUDE.md).
+Each incoming message is answered by `ask_hermes.py`, which runs the
+`hermes` CLI with the `farm-telegram` skill (see
+`~/.hermes/skills/farm-telegram/SKILL.md`, mirrored into this repo at
+`agent/hermes-skill/farm-telegram/SKILL.md`). That skill carries the
+plain-language presentation rules and the gbrain-vs-farm-stats tool-choice
+rules that this file used to enforce itself via --append-system-prompt +
+an ALLOWED_TOOLS list (see docs/PROJECT_LOG.md for the 2026-07-08 backend
+swap this replaced).
 """
 
-import asyncio
 import logging
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -34,61 +36,12 @@ ALLOWED_USER_IDS = {
     for uid in os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "").split(",")
     if uid.strip()
 }
-CLAUDE_TIMEOUT_SECONDS = int(os.environ.get("CLAUDE_TIMEOUT_SECONDS", "180"))
-
-# Mirrors CLAUDE.md: gbrain-search-safe (not raw gbrain search) for exact-ID
-# lookups, gbrain query for fuzzy questions, farm-stats for aggregates. No
-# Bash/Edit/Write/etc — this bot can only ever read farm data, nothing else.
-ALLOWED_TOOLS = ",".join(
-    [
-        "mcp__gbrain-search-safe__search_with_fallback",
-        "mcp__gbrain__query",
-        "mcp__farm-stats__pesagens_count",
-        "mcp__farm-stats__pesagens_aggregate",
-        "mcp__farm-stats__pesagens_extremes",
-        "mcp__farm-stats__pesagens_date_range",
-        "mcp__farm-stats__pesagens_group_counts",
-        "mcp__farm-stats__pesagens_distinct_count",
-        "mcp__farm-stats__fretes_aggregate",
-    ]
-)
 
 TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
-# This is a one-shot message to a non-technical farm employee, not an
-# interactive dev session: they cannot reply mid-turn, and they should never
-# see tool names, file paths, code, or CLAUDE.md referenced directly.
-TELEGRAM_SYSTEM_PROMPT = """You are answering a single Telegram message from \
-a Fazenda Continental farm employee who is not a programmer. This is your \
-only chance to respond -- they cannot reply to a follow-up question, so \
-always give a final, direct answer instead of asking one.
-
-Never mention tool names, function names, file paths, line numbers, \
-CLAUDE.md, MCP, or any other implementation detail -- the reader has no \
-context for any of that and does not need it.
-
-If the current tools genuinely cannot answer the question, say so in one or \
-two plain sentences describing what you *can* look up instead (e.g. totals/\
-averages by driver, plate, or date; specific romaneio/placa/talhão lookups) \
--- do not explain why in technical terms, and do not propose a code change.
-
-Answer in the same language the question was asked in."""
-
-
-# Backend swapped from `claude -p` to Hermes: same contract (question -> answer
-# string), but Hermes reads the gbrain/farm-stats MCP allowlists from its own
-# config and the farm-telegram skill for presentation rules, so ALLOWED_TOOLS /
-# TELEGRAM_SYSTEM_PROMPT are no longer needed here. See ask_hermes.py.
-import sys
-
 if REPO_DIR not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
-from telegram_bot.ask_hermes import ask_hermes_verified as _ask_hermes_verified  # noqa: E402,F401
-
-# Backend-backed alias kept for any remaining call sites.
-async def ask_claude(question: str) -> str:
-    answer, _ok, _reason = await _ask_hermes_verified(question)
-    return answer
+from telegram_bot.ask_hermes import ask_hermes_verified as _ask_hermes_verified  # noqa: E402
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

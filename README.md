@@ -1,67 +1,106 @@
-# Fazenda Continental — Farm Data Pipeline
+# Fazenda Continental — Pipeline de Dados da Fazenda
 
-Raw farm data + the load/adapter pipeline that feeds the real `gbrain` brain
-(`~/gbrain`, connected as an MCP server). Successor to the original
-`fazenda-continental-internship` repo — this one carries forward only the
-load-bearing pieces (raw data, loaders, adapter); the deprecated local search
-prototype (fastembed/sentence-transformers, separate `documentos` table) was
-not carried over.
+Dados brutos da fazenda + o pipeline de carga que alimenta o Postgres
+consultado diretamente pelas ferramentas MCP do `farm-stats`. Sucessor do
+repositório original `fazenda-continental-internship` — este aqui leva
+adiante apenas as peças essenciais (dados brutos, carregadores, ferramentas
+de consulta); o protótipo de busca local descontinuado (fastembed/
+sentence-transformers, tabela `documentos` separada) não foi trazido.
 
 ## Pipeline
 
 ```
-data/*.csv, *.xlsx  (raw farm exports)
-        ↓  scripts/load_pesagem_csv.py, load_fretes_xlsx.py
-gbrain_dev Postgres: pesagens, fretes_colheita tables
-        ↓  scripts/generate_gbrain_pages.py
-~/gbrain-farm-pages/  (one gbrain-format markdown page per row)
-        ↓  gbrain import ~/gbrain-farm-pages
-gbrain (query via the gbrain MCP tool)
+data/*.csv, *.xlsx  (exportações brutas da fazenda)
+        ↓  scripts/load_pesagem_csv.py, load_fretes_xlsx.py, load_equipamentos_xlsx.py
+           (o roteamento de .xlsx é automático — scripts/detect_and_load_xlsx.py)
+gbrain_dev Postgres: tabelas pesagens, fretes_colheita, uso_equipamentos
+        ↓  consultado diretamente (sem passo de exportação/importação)
+mcp_server/farm_stats.py  →  servidor MCP "farm-stats":
+        pesagem_get / frete_get                      (busca exata por chave)
+        uso_equipamentos_search                       (filtro — diário de uso, sem ID único)
+        pesagens_count/aggregate/extremes/...          (agregados de pesagens/fretes)
+        uso_equipamentos_count/aggregate/extremes/...  (agregados de uso de equipamento)
+        *_search_observacao                            (busca textual, ILIKE)
+        ↓
+Hermes / Claude Code (via MCP)
 ```
 
-`mcp_server/farm_stats.py` reads the same `gbrain_dev` Postgres tables
-directly (not via gbrain) to answer count/sum/average/min/max questions
-gbrain's search can't answer reliably — registered as the `farm-stats` MCP
-server; see CLAUDE.md for when to use which.
+O `gbrain` (`~/R.P. fazenda continetal/gbrain`) continua conectado como
+servidor MCP separado, mas **não** faz mais parte deste pipeline — as três
+tabelas acima são consultadas diretamente, sem passar por ele. Isso
+substitui um desenho anterior (linha do Postgres → página markdown →
+`gbrain import` → busca semântica) que o próprio `docs/AUDIT.md` mostrou
+pouco confiável para os tipos de pergunta mais comuns aqui (ID exato,
+agregados) e que exigia lembrar de sincronizar manualmente cada tabela
+nova — ver `docs/PROJECT_LOG.md` (entrada de 2026-07-10) para o histórico
+completo. `scripts/generate_gbrain_pages.py` fica no repositório só como
+referência, aposentado (aviso no topo do próprio arquivo). O gbrain segue
+reservado para conteúdo genuinamente não estruturado no futuro (atas,
+contratos) — veja CLAUDE.md para as regras de quando usar qual ferramenta.
 
-## Structure
+## Estrutura
 
-- `data/` — raw farm exports (gitignored — see `.gitignore`; same PII
-  sensitivity as the generated pages: driver names, plates, client/document
-  numbers)
-- `scripts/` — the pipeline scripts, plus `db_upsert.py` (shared upsert
-  helper), `logging_setup.py` (shared logging config), and `setup.sh`
-  (chains everything a fresh clone can automate — see `docs/SETUP.md`)
-- `mcp_server/` — `farm_stats.py`, the `farm-stats` MCP server (aggregate
-  queries direct from Postgres), plus `gbrain_search_safe.py`, the
-  `gbrain-search-safe` MCP server (wraps gbrain keyword search with an
-  explicit no-match message — see CLAUDE.md). Each has its own `serve*.sh`
-  launch wrapper (resolves paths from its own location so cwd doesn't
-  matter)
-- `telegram_bot/` — `bot.py`, a Telegram front-end that answers each
-  message by running `claude -p` from the repo root (so CLAUDE.md's rules
-  and the MCP tools above apply automatically); allowlisted Telegram user
-  IDs only, since the data is PII-sensitive. `run.sh` is the launcher;
-  copy `.env.example` to `.env` (gitignored) and fill in the bot token —
-  see CLAUDE.md for how to get one
-- `logs/` — `pipeline.log`, a chronological record of every script run
-  (gitignored — same PII sensitivity as `data/`)
-- `docs/` — extended documentation: `docs/USAGE.md` (how to phrase
-  questions so gbrain reliably gets used), `docs/SETUP.md` (getting a fresh
-  clone working end to end on a new machine), and `docs/AUDIT.md` (the
-  testing/evidence behind CLAUDE.md's tool-choice rules)
-- `notes/` — internship journal carried over from the original repo
-- `requirements.txt` — pinned Python deps for `scripts/` (Python 3.9 venv)
-- `.mcp.json` — registers the `farm-stats` and `gbrain-search-safe` MCP
-  servers for this project
-- `CLAUDE.md` — terse behavior rules for Claude Code sessions in this repo
-  (no ad-hoc SQL fallback; gbrain-search-safe/gbrain-query for content,
-  farm-stats for aggregates); see `docs/AUDIT.md` for why
-- `.claude/settings.json` — project-level permission denylist enforcing
-  two of CLAUDE.md's rules structurally (raw `gbrain search` and `psql`
-  via Bash), not just by instruction
+- `data/` — exportações brutas de dados da fazenda (xlsx, csv)
+- `scripts/` — os scripts do pipeline (`load_pesagem_csv.py`,
+  `load_fretes_xlsx.py`, `load_equipamentos_xlsx.py`,
+  `detect_and_load_xlsx.py` — detecta qual carregador usar em cada `.xlsx`
+  pelas colunas do cabeçalho, não pelo nome do arquivo), além de
+  `db_upsert.py` (helper de upsert compartilhado), `logging_setup.py`
+  (configuração de log compartilhada), `setup.sh` (encadeia tudo que um
+  clone novo consegue automatizar — veja `docs/SETUP.md`), e
+  `golden_check.py` / `golden_cron.sh` (um harness de regressão de
+  "respostas padrão-ouro" — roda um conjunto fixo de perguntas conhecidas
+  pelo mesmo caminho `ask_hermes` usado em produção e checa as respostas
+  contra o gabarito, para pegar alucinação/desvio ao longo do tempo;
+  `golden_cron.sh` é um wrapper de cron que fica em silêncio quando passa
+  e reporta quando falha). `generate_gbrain_pages.py` está aposentado —
+  ver aviso no topo do arquivo
+- `mcp_server/` — `farm_stats.py`, o servidor MCP `farm-stats`: busca
+  exata por chave (`pesagem_get`, `frete_get`), filtro/busca em
+  `uso_equipamentos`, agregados das três tabelas, e busca textual
+  (`*_search_observacao`) — veja CLAUDE.md para o roteamento completo.
+  `serve.sh` é o wrapper de inicialização (resolve os caminhos a partir da
+  própria localização, então o diretório de trabalho não importa).
+  `gbrain_search_safe.py` continua no repositório (não registrado mais —
+  pode voltar a ser útil se o gbrain buscar conteúdo não estruturado no
+  futuro)
+- `telegram_bot/` — `bot.py`, um front-end de Telegram que responde cada
+  mensagem via `ask_hermes.py` (chama a CLI do agente `hermes` com a skill
+  `farm-telegram` — veja `agent/README.md`), com uma checagem em duas
+  passadas que retém a resposta se uma segunda passada independente a
+  contradisser; apenas IDs de usuário do Telegram na lista de permissão,
+  já que os dados são sensíveis (PII). `run.sh` é o script de
+  inicialização; copie `.env.example` para `.env` (fora do git) e
+  preencha o token do bot — veja CLAUDE.md para saber como conseguir um
+- `agent/` — um espelho versionado da configuração do agente Hermes que
+  de fato responde às perguntas (a cópia real vive fora do git, por
+  máquina, em `~/.hermes/`) — as regras de apresentação/escolha de
+  ferramenta que o bot segue, e como reproduzir a configuração em uma
+  máquina nova; veja `agent/README.md`
+- `logs/` — `pipeline.log`, um registro cronológico de cada execução de
+  script (fora do git — mesma sensibilidade de PII que `data/`)
+- `VISAO_GERAL.md` (na raiz do repositório) — visão consolidada do
+  projeto: como funciona, por que o gbrain foi trocado por ferramentas
+  diretas, pontos positivos/negativos, explicação de cada pasta em
+  linguagem simples. Leia este primeiro se está chegando agora.
+- `docs/` — documentação estendida: `docs/USAGE.md` (como o
+  sistema responde perguntas hoje), `docs/SETUP.md` (como colocar um
+  clone novo funcionando do zero em uma máquina nova), e `docs/AUDIT.md`
+  (os testes/evidências por trás das regras de escolha de ferramenta do
+  CLAUDE.md)
+- `notes/` — diário do estágio, trazido do repositório original
+- `requirements.txt` — dependências Python fixadas para `scripts/` (venv
+  Python 3.9)
+- `.mcp.json` — registra o servidor MCP `farm-stats` para este projeto
+- `CLAUDE.md` — regras de comportamento sucintas para sessões do Claude
+  Code neste repositório (sem fallback improvisado para SQL; ferramentas
+  do farm-stats para tudo — busca exata, agregados, texto livre); veja
+  `docs/AUDIT.md` para entender o porquê
+- `.claude/settings.json` — lista de permissões negadas em nível de
+  projeto, que reforça uma das regras do CLAUDE.md de forma estrutural
+  (`psql` via Bash), não só por instrução
 
-## Setup
+## Instalação
 
 ```
 python3 -m venv .venv
@@ -69,8 +108,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The `farm-stats` MCP server needs Python >=3.10 (the pipeline's own `.venv`
-is 3.9), so it runs in a separate venv:
+O servidor MCP `farm-stats` precisa de Python >=3.10 (o `.venv` do
+pipeline em si é 3.9), então ele roda em um venv separado:
 
 ```
 python3.12 -m venv .venv-mcp
@@ -78,25 +117,28 @@ source .venv-mcp/bin/activate
 pip install -r mcp_server/requirements.txt
 ```
 
-## Re-running the pipeline
+## Reexecutando o pipeline
 
-All three scripts are safe to re-run against the same or updated data. The
-loaders (`load_pesagem_csv.py`, `load_fretes_xlsx.py`) upsert on a natural
-key (`numero_romaneio` for pesagens, `local` for fretes_colheita) via
-`db_upsert.py` — re-running against a file with rows already in Postgres
-updates them in place instead of duplicating. `generate_gbrain_pages.py` is
-always safe to re-run (overwrites by filename). Follow up with
-`gbrain import ~/gbrain-farm-pages` to re-embed anything new/changed.
+Os carregadores são seguros para reexecutar sobre os mesmos dados ou
+dados atualizados. Todos fazem upsert numa chave natural
+(`numero_romaneio` para pesagens, `local` para fretes_colheita, um hash
+da linha inteira para `uso_equipamentos` — é um diário de uso, sem coluna
+que identifique uma linha unicamente) via `db_upsert.py` — reexecutar
+sobre um arquivo com linhas já presentes no Postgres atualiza essas
+linhas em vez de duplicá-las. Não há passo de exportação/importação
+depois da carga — as tabelas ficam disponíveis para consulta assim que
+carregadas.
 
-See `CLAUDE.md` for the rule on always using the gbrain MCP tool (never raw
-SQL) to answer questions about this data, and `docs/USAGE.md` for how an
-answer actually gets made and how to phrase questions so gbrain reliably
-gets used.
+Veja o CLAUDE.md para a regra de sempre usar as ferramentas MCP do
+`farm-stats` (nunca SQL bruto) para responder perguntas sobre esses
+dados, e `docs/USAGE.md` para entender como uma resposta é de fato
+construída.
 
 ## Logging
 
-All three pipeline scripts log to both the console and `logs/pipeline.log`
-(via `scripts/logging_setup.py`), so a run's state — rows parsed/upserted,
-warnings (e.g. an unparseable date), errors, row counts at each stage — is
-recorded chronologically across scripts, not just visible while watching the
-terminal live.
+Os scripts do pipeline registram log tanto no console quanto em
+`logs/pipeline.log` (via `scripts/logging_setup.py`), então o estado de
+uma execução — linhas lidas/upsertadas, avisos (ex.: uma data que não
+pôde ser interpretada), erros, contagem de linhas em cada etapa — fica
+registrado cronologicamente entre os scripts, não só visível enquanto se
+observa o terminal ao vivo.

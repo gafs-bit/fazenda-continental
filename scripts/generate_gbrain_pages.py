@@ -1,4 +1,17 @@
 """
+APOSENTADO (2026-07-10) -- não faz mais parte do pipeline em uso. Mantido
+só como referência/template (a lógica de slugify/write_page pode servir de
+base se o gbrain vier a indexar conteúdo genuinamente não estruturado no
+futuro). Não reexecute isto contra dados de produção para responder
+perguntas -- pesagens/fretes_colheita/uso_equipamentos são consultadas
+diretamente pelas ferramentas do farm-stats (mcp_server/farm_stats.py:
+pesagem_get, frete_get, uso_equipamentos_*), sem esse passo de conversão.
+Ver docs/AUDIT.md e docs/PROJECT_LOG.md (entrada de 2026-07-10) para o
+porquê: o gbrain, testado, não era confiável para os tipos de pergunta
+mais comuns sobre estes dados (ID exato, agregados), e cada tabela nova
+exigia lembrar deste passo manual de sincronização -- foi exatamente isso
+que deixou `uso_equipamentos` invisível ao bot por um tempo.
+
 Converts rows from `pesagens` and `fretes_colheita` (already loaded into
 gbrain_dev by load_pesagem_csv.py / load_fretes_xlsx.py) into gbrain-format
 markdown pages, so they can be ingested with `gbrain import <dir>`.
@@ -8,9 +21,10 @@ YAML frontmatter (type/title/tags/slug) plus a body. One page is generated
 per row, mirroring the row-level granularity already used by the local
 `documentos` embedding prototype (build_embeddings.py).
 
-Output goes OUTSIDE any git repo by default (~/gbrain-farm-pages) since the
-rows contain real driver names, truck plates and client/document numbers --
-the same sensitivity class as data/ (gitignored in this repo). Do not point
+Output goes OUTSIDE any git repo by default
+(~/R.P. fazenda continetal/gbrain-farm-pages) since the rows contain real
+driver names, truck plates and client/document numbers -- the same
+sensitivity class as data/ (gitignored in this repo). Do not point
 --output-dir at a git-tracked location without gitignoring it first.
 """
 
@@ -26,7 +40,7 @@ from sqlalchemy import create_engine
 from logging_setup import get_logger
 
 DEFAULT_DB_URL = "postgresql+psycopg2://localhost/gbrain_dev"
-DEFAULT_OUTPUT_DIR = Path.home() / "gbrain-farm-pages"
+DEFAULT_OUTPUT_DIR = Path.home() / "R.P. fazenda continetal" / "gbrain-farm-pages"
 
 logger = get_logger("generate_gbrain_pages")
 

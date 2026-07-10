@@ -1,92 +1,110 @@
-# Setting up this repo on a new machine
+# Configurando este repositório em uma máquina nova
 
-Cloning this repo gets you the code. It does **not** get you a working
-system — several things it depends on live outside git on purpose (real farm
-data is PII-sensitive; databases, venvs, and secrets don't belong in version
-control). This doc is the checklist for going from a fresh clone to a working
-answer.
+Clonar este repositório te dá o código. Isso **não** te dá um sistema
+funcionando — várias coisas das quais ele depende vivem fora do git de
+propósito (dados reais da fazenda são sensíveis/PII; bancos de dados,
+venvs e segredos não pertencem ao controle de versão). Este documento é o
+checklist para ir de um clone novo até uma resposta funcionando.
 
-## What has to exist before any of this is useful
+## O que precisa existir antes de qualquer coisa aqui ser útil
 
-- **Postgres**, running, reachable at `postgresql+psycopg2://localhost/gbrain_dev`
-  (or set `FARM_STATS_DSN` / edit the loader scripts' `DEFAULT_DB_URL` to point
-  elsewhere). The `gbrain_dev` database itself must already exist
-  (`createdb gbrain_dev`) — the loader scripts create their own tables inside
-  it (`CREATE TABLE IF NOT EXISTS`), but not the database.
-- **`gbrain`**, installed and initialized separately — this repo only
-  *connects* to it (`~/gbrain`), it doesn't install or configure it. See
-  gbrain's own docs for `gbrain init` against the same `gbrain_dev` Postgres.
-- **The `claude` CLI**, installed and logged in — needed both for interactive
-  use and because the Telegram bot shells out to `claude -p`.
-- **Python 3.9+ and 3.12+** available (`python3` and `python3.12` on PATH) —
-  the pipeline scripts and the two MCP servers/bot use different venvs on
-  purpose (see below).
-- **Real GSB/farm export files** (`data/*.csv`, `*.xlsx`) — gitignored, not
-  in the repo. You need your own copies; nothing to load ships with the code.
+- **Postgres**, rodando, acessível em
+  `postgresql+psycopg2://localhost/gbrain_dev` (ou defina `FARM_STATS_DSN`
+  / edite o `DEFAULT_DB_URL` dos scripts de carga para apontar para outro
+  lugar). O próprio banco `gbrain_dev` precisa já existir
+  (`createdb gbrain_dev`) — os scripts de carga criam suas próprias
+  tabelas dentro dele (`CREATE TABLE IF NOT EXISTS`), mas não o banco.
+- **`gbrain`** (opcional) — `pesagens`/`fretes_colheita`/`uso_equipamentos`
+  são consultadas diretamente pelas ferramentas do `farm-stats` e nunca
+  chamam o gbrain; ele só é necessário se este projeto vier a buscar
+  conteúdo genuinamente não estruturado no futuro (veja `docs/USAGE.md`).
+  Se for usar, este repositório apenas *se conecta* a ele
+  (`~/R.P. fazenda continetal/gbrain`), não o instala nem o configura.
+- **A CLI `hermes`**, instalada e configurada — necessária tanto para uso
+  interativo quanto porque o bot do Telegram chama
+  `hermes chat -s farm-telegram` por baixo dos panos (veja
+  `agent/README.md` para como configurar o Hermes para este projeto).
+- **Python 3.9+ e 3.12+** disponíveis (`python3` e `python3.12` no PATH)
+  — os scripts do pipeline e os dois servidores MCP/bot usam venvs
+  diferentes de propósito (veja abaixo).
+- **Arquivos reais de exportação GSB/fazenda** (`data/*.csv`, `*.xlsx`) —
+  fora do git, não estão no repositório. Você precisa das suas próprias
+  cópias; nada para carregar já vem junto com o código.
 
-## Steps
+## Passos
 
 ```bash
 git clone git@gitlab.com:guac-co-group/fazenda-continental.git
 cd fazenda-continental
 ```
 
-**1. Run the setup script.** `scripts/setup.sh` chains everything below that
-can actually be automated — checks prerequisites are on PATH, creates the
-three venvs and installs their deps, checks/creates the `gbrain_dev`
-database, and (if it finds files already in `data/`) runs the loaders +
-`generate_gbrain_pages.py` + `gbrain import` for you. Safe to re-run.
+**1. Rode o script de instalação.** `scripts/setup.sh` encadeia tudo
+abaixo que pode de fato ser automatizado — verifica se os pré-requisitos
+estão no PATH, cria os três venvs e instala suas dependências,
+verifica/cria o banco `gbrain_dev`, e (se encontrar arquivos já em
+`data/`) roda os carregadores certos para cada arquivo (`.csv` sempre vai
+para `load_pesagem_csv.py`; cada `.xlsx` é roteado automaticamente pelo
+`scripts/detect_and_load_xlsx.py`, que detecta o carregador certo pelas
+colunas do próprio arquivo). Não há mais passo de geração/importação de
+páginas — as tabelas ficam consultáveis assim que carregadas. Seguro
+para reexecutar.
 ```bash
 ./scripts/setup.sh
 ```
 
-**It deliberately does NOT:**
-- **Run `gbrain init` for you.** That's an interactive wizard asking for
-  your own API keys (ZeroEntropy/Anthropic/etc) — scripting blind execution
-  of a step that needs someone's secrets is the same mistake as hardcoding
-  a token. Run it yourself, once, in **Postgres/Supabase mode** — not
-  `--pglite` (gbrain's embedded, no-server mode): `farm-stats` connects to
-  the same Postgres database directly via `psycopg2`, which only works if
-  gbrain is actually running against a real Postgres server:
+**Ele deliberadamente NÃO:**
+- **Roda o `gbrain init` para você.** Esse é um assistente interativo que
+  pede suas próprias chaves de API (ZeroEntropy/Anthropic/etc) —
+  automatizar cegamente uma etapa que precisa dos segredos de alguém é o
+  mesmo erro que fixar um token no código. Rode você mesmo, uma vez, em
+  **modo Postgres/Supabase** — não `--pglite` (o modo embutido do
+  gbrain, sem servidor): o `farm-stats` se conecta diretamente ao mesmo
+  banco Postgres via `psycopg2`, o que só funciona se o gbrain estiver
+  de fato rodando contra um servidor Postgres real:
   ```bash
   gbrain init --url postgresql://localhost/gbrain_dev
   ```
-- **Fetch or fabricate real farm data.** `data/*.csv`/`*.xlsx` are
-  gitignored on purpose (PII — driver names, plates, client documents). If
-  `data/` is empty when you run the script, it skips the load step and
-  tells you so. Drop your real GSB exports in and re-run.
-- **Install or vendor `gbrain` itself.** It's a separate, full application
-  by design — see its own docs on multi-project "company brain" deployments.
-  The script only checks it's on PATH and already initialized.
+- **Busca ou fabrica dados reais da fazenda.** `data/*.csv`/`*.xlsx`
+  ficam fora do git de propósito (PII — nomes de motoristas, placas,
+  documentos de clientes). Se `data/` estiver vazio quando você rodar o
+  script, ele pula a etapa de carga e avisa você disso. Coloque suas
+  exportações reais do GSB e reexecute.
+- **Instala ou vendoriza o próprio `gbrain`.** É uma aplicação separada e
+  completa por design — veja a própria documentação dele sobre
+  implantações multi-projeto de "cérebro da empresa" (company brain). O
+  script só verifica se está no PATH e já inicializado.
 
-**2. Register the MCP servers.** `.mcp.json` is checked in and already
-points at the right scripts using `${CLAUDE_PROJECT_DIR}`, so this works
-regardless of where you cloned the repo — nothing to edit. Start a Claude
-Code session in the repo root and run `/mcp` to confirm `farm-stats` and
-`gbrain-search-safe` both show as connected.
+**2. Registre o servidor MCP.** O `.mcp.json` está versionado e já
+aponta para o script certo usando `${CLAUDE_PROJECT_DIR}`, então isso
+funciona independentemente de onde você clonou o repositório — nada para
+editar. Inicie uma sessão do Claude Code na raiz do repositório e rode
+`/mcp` para confirmar que `farm-stats` aparece como conectado.
 
-**3. Telegram bot** (optional — only if you want the bot, not just
-interactive Claude Code access):
+**3. Bot do Telegram** (opcional — só se você quiser o bot, não apenas
+acesso interativo via Claude Code):
 ```bash
 cd telegram_bot
 cp .env.example .env
 ```
-Fill in `.env` yourself (don't paste secrets into a chat with an AI
-assistant, including this one):
-- `TELEGRAM_BOT_TOKEN` — from `@BotFather` on Telegram (`/newbot`)
-- `ALLOWED_TELEGRAM_USER_IDS` — leave empty at first, run `./run.sh`,
-  message the bot, and its rejection reply will include your numeric
-  Telegram user id. Add it here and restart.
+Preencha o `.env` você mesmo (não cole segredos numa conversa com um
+assistente de IA, incluindo este):
+- `TELEGRAM_BOT_TOKEN` — obtido no `@BotFather` no Telegram (`/newbot`)
+- `ALLOWED_TELEGRAM_USER_IDS` — deixe vazio no início, rode `./run.sh`,
+  mande uma mensagem para o bot, e a resposta de rejeição vai incluir seu
+  ID numérico de usuário do Telegram. Adicione aqui e reinicie.
 
 ```bash
 ./run.sh
 ```
 
-## Verifying it actually works
+## Verificando que funciona de fato
 
-Ask a question you can independently check against the raw export, e.g. a
-specific Romaneio number's weight — and check the answer against the source
-file directly. Also try an ID that doesn't exist (e.g. a Romaneio number way
-outside the real range) — it should come back with an explicit "no match,"
-not a fabricated-looking answer. See `CLAUDE.md` for why that check matters
-and `docs/USAGE.md` for how to phrase questions so they reliably hit gbrain.
+Faça uma pergunta que você consiga checar de forma independente contra a
+exportação bruta, por exemplo o peso de um número de Romaneio específico
+— e confira a resposta diretamente contra o arquivo de origem. Tente
+também um ID que não existe (ex.: um número de Romaneio bem fora da faixa
+real) — a resposta deve vir com um "sem resultado" explícito
+(`match_found: false`), não uma resposta com aparência fabricada. Veja o
+CLAUDE.md para a tabela completa de qual ferramenta responde qual tipo
+de pergunta, e `docs/USAGE.md` para o fluxo completo de como uma
+resposta é construída.

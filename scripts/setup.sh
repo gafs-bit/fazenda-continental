@@ -12,9 +12,10 @@
 #     step if it finds files already sitting in data/.
 #   - gbrain itself is not installed or vendored. It's a separate,
 #     full application by design (see its own docs on multi-project
-#     "company brain" deployments) -- this script only checks it's on
-#     PATH and already initialized against Postgres (not PGLite: farm-stats
-#     needs a real Postgres connection to gbrain's own database).
+#     "company brain" deployments) -- and as of 2026-07-10 it's optional
+#     for this repo: pesagens/fretes_colheita/uso_equipamentos are queried
+#     directly by farm-stats (never through gbrain), so gbrain is only
+#     needed if/when genuinely unstructured content gets added later.
 #
 # Safe to re-run: every step below is idempotent.
 
@@ -106,13 +107,14 @@ if [ -e "${csv_files[0]}" ] || [ -e "${xlsx_files[0]}" ]; then
     for f in data/*.xlsx; do
         [ -e "$f" ] || continue
         echo "  loading $f ..."
-        .venv/bin/python scripts/load_fretes_xlsx.py "$f"
+        # Routes by the file's actual columns (not assumed by extension) --
+        # see scripts/detect_and_load_xlsx.py's docstring for why: this repo
+        # used to assume every .xlsx was a fretes_colheita export, which
+        # crashed the day a third export type appeared.
+        .venv/bin/python scripts/detect_and_load_xlsx.py "$f"
     done
-    echo "  generating gbrain pages..."
-    .venv/bin/python scripts/generate_gbrain_pages.py
-    echo "  importing into gbrain..."
-    gbrain import ~/gbrain-farm-pages
-    ok "data loaded and imported"
+    ok "data loaded (pesagens, fretes_colheita, uso_equipamentos are queried"
+    ok "directly via the farm-stats MCP tools -- no export/import step needed)"
 else
     warn "no files in data/*.csv or data/*.xlsx yet"
     echo "  Drop your real GSB exports into data/, then re-run this script"
@@ -121,5 +123,5 @@ fi
 
 step "Done"
 echo "Next: start a Claude Code session in this directory and run /mcp to"
-echo "confirm farm-stats and gbrain-search-safe are connected. See"
-echo "docs/SETUP.md for the Telegram bot's separate .env setup."
+echo "confirm farm-stats is connected. See docs/SETUP.md for the Telegram"
+echo "bot's separate .env setup."

@@ -1,0 +1,64 @@
+# Registro de servidores MCP para o Hermes — espelhado de ~/.hermes/config.yaml
+#
+# Isso NÃO é lido diretamente pelo Hermes. O Hermes só lê sua configuração
+# real em ~/.hermes/config.yaml (fora do git, por máquina, e que também
+# guarda chaves de API/segredos que nunca devem ser commitados). Este
+# arquivo é uma cópia sanitizada só do bloco `mcp_servers:` relevante para
+# este projeto, mantida aqui para que uma máquina/clone novo tenha algo
+# para colar em vez de reconstruir do zero ou de conhecimento tácito.
+#
+# Para usar: abra ~/.hermes/config.yaml, encontre (ou crie) a chave
+# `mcp_servers:`, e combine este bloco nela — depois corrija os dois
+# caminhos `command:` abaixo para bater com onde VOCÊ clonou `gbrain` e
+# `fazenda-continental-data` na sua máquina (são caminhos absolutos; o
+# Hermes não expande `~` aqui).
+#
+# gbrain-search-safe foi removido (2026-07-10): pesagens/fretes_colheita/
+# uso_equipamentos agora são consultadas diretamente pelas ferramentas do
+# farm-stats abaixo (pesagem_get, frete_get, uso_equipamentos_*) em vez de
+# passar pelo gbrain — ver docs/AUDIT.md e docs/PROJECT_LOG.md. O bloco
+# `gbrain:` continua aqui só para conteúdo não estruturado futuro.
+#
+# Veja agent/README.md para o panorama completo (por que isso vive fora
+# do repositório, o que o farm-telegram/SKILL.md faz, como as peças se
+# encaixam).
+
+mcp_servers:
+  gbrain:
+    command: /caminho/para/gbrain/mcp-serve.sh
+    connect_timeout: 30.0
+    enabled: true
+    tools:
+      include:
+        - query
+        - search
+        - list_pages
+        - get_page
+        - get_stats
+        - get_tags
+        - find_anomalies
+  farm-stats:
+    command: /caminho/para/fazenda-continental-data/mcp_server/serve.sh
+    env:
+      FARM_STATS_DSN: dbname=gbrain_dev
+    connect_timeout: 30.0
+    enabled: true
+    tools:
+      include:
+        - pesagens_count
+        - pesagens_aggregate
+        - pesagens_extremes
+        - pesagens_date_range
+        - pesagens_group_counts
+        - pesagens_distinct_count
+        - fretes_aggregate
+        - pesagem_get
+        - frete_get
+        - pesagens_search_observacao
+        - uso_equipamentos_search
+        - uso_equipamentos_count
+        - uso_equipamentos_aggregate
+        - uso_equipamentos_extremes
+        - uso_equipamentos_group_counts
+        - uso_equipamentos_distinct_count
+        - uso_equipamentos_search_observacao

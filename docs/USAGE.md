@@ -1,74 +1,83 @@
-# Asking the system questions
+# Fazendo perguntas ao sistema
 
-The farm data is queryable through Claude Code once the `gbrain` MCP server is
-connected (see main `README.md` for the pipeline that gets data into gbrain in
-the first place). This doc is about the other side: how to ask questions so
-you actually get answers grounded in the real data.
+Os dados da fazenda (`pesagens`, `fretes_colheita`, `uso_equipamentos`)
+ficam consultáveis através das ferramentas MCP do `farm-stats` assim que o
+servidor está conectado (veja o `README.md` principal para o pipeline que
+leva os dados até o Postgres). Este documento é sobre o outro lado: como
+uma pergunta em linguagem natural vira uma resposta.
 
-## How an answer actually gets made
+## Como uma resposta é de fato construída (desde 2026-07-10)
 
 ```
-1. You ask a question (in a Claude Code session with gbrain connected)
+1. Você faz uma pergunta (Telegram, Claude Code, ou hermes chat direto)
         ↓
-2. Claude recognizes it needs farm data and calls the gbrain tool
+2. O agente (Hermes ou Claude) reconhece o tipo de pergunta e escolhe a
+   ferramenta farm-stats certa — busca exata, filtro, agregado, ou texto
+   livre (regras completas em CLAUDE.md / agent/hermes-skill/farm-telegram/SKILL.md)
         ↓
-3. gbrain turns your question into a "meaning vector" (via ZeroEntropy)
+3. A ferramenta roda um SELECT parametrizado e determinístico direto no
+   Postgres (nunca ranking semântico, nunca SQL livre)
         ↓
-4. gbrain compares it against every stored record's vector (semantic search)
-   + does a plain keyword search in parallel, blends both rankings
-        ↓
-5. gbrain returns the top-ranked matching records (raw text, not an answer)
-        ↓
-6. Claude reads those records and writes the actual answer
+4. O agente lê o resultado (um registro, uma lista, ou um número) e
+   escreve a resposta, citando o identificador de origem
 ```
 
-gbrain is the search engine; Claude is what writes the sentence. This pattern
-is called RAG (Retrieval-Augmented Generation) — the answer is grounded in
-retrieved records, not generated purely from the model's own training.
+Não há mais um passo de busca semântica/RAG para essas três tabelas — o
+gbrain foi removido desse caminho porque a busca dele, testada
+(`docs/AUDIT.md`), rankeava por similaridade textual, não por
+correspondência exata ou valor numérico, e não conseguia agregar. Uma
+ferramenta determinística (`WHERE numero_romaneio = X`, `SUM(...)`, etc.)
+não tem essa ambiguidade: ou encontra a linha certa, ou retorna
+`match_found: false` de forma explícita.
 
-## Good practices to make sure it actually searches the data
+## Qual ferramenta responde qual tipo de pergunta
 
-**1. Name the tool explicitly when it matters.** Say "search gbrain for..."
-or "use the gbrain tool to find..." instead of just asking bare. This is the
-single most reliable way to trigger an actual tool call.
+- **ID exato** (Romaneio, Talhão) → `pesagem_get` / `frete_get`.
+- **Uso de equipamento/máquina** (sem ID único de linha) →
+  `uso_equipamentos_search`.
+- **Contagem / soma / média / mínimo / máximo** → as ferramentas
+  `*_count` / `*_aggregate` / `*_extremes` / `*_group_counts` /
+  `*_distinct_count` de cada tabela.
+- **Texto livre nas observações** → `*_search_observacao`.
 
-**2. Phrase questions so they clearly need a lookup, not general knowledge.**
-- Good: *"What does our data show for sorghum loads in June?"*
-- Risky: *"How do sorghum weighings usually work?"* — sounds like general
-  agronomy knowledge, might get answered without touching gbrain at all.
+Veja `CLAUDE.md` para a tabela completa e `docs/AUDIT.md` para a
+evidência por trás dessas escolhas.
 
-Anchor the question to something only the real data could answer — a date
-range, a specific field name, a romaneio number, a driver name.
+## Boas práticas ao perguntar
 
-**3. Ask for specifics that can't be guessed.** Exact weights, dates,
-percentages, or IDs force retrieval, since there's no plausible way to answer
-convincingly without actually looking. Vague/summary questions are the ones
-most likely to get an ungrounded-but-confident-sounding answer.
+**1. Seja específico.** IDs, datas, nomes exatos de motorista/equipamento
+levam direto à ferramenta certa. Perguntas muito vagas ("me conte sobre a
+fazenda") não mapeiam para nenhuma ferramenta determinística — hoje, sem
+identificador ou filtro nenhum, o sistema não tem como responder algo
+assim com fundamento nos dados.
 
-**4. Verify at the start of a session.** Run `/mcp` right after opening a new
-Claude Code session and confirm `gbrain` shows as connected before relying on
-it. New MCP servers only load at session start — they can't be picked up
-mid-conversation.
+**2. Peça específicos que não podem ser adivinhados.** Pesos, datas,
+porcentagens ou IDs exatos deixam claro que a resposta precisa vir de uma
+consulta real, não de conhecimento geral.
 
-**5. Ask for sources when in doubt.** If an answer feels off or too smooth,
-ask "which gbrain pages did you pull that from?" or "show me the romaneio
-numbers." If Claude can't cite specific records, it likely didn't actually
-search.
+**3. Peça as fontes quando estiver em dúvida.** Toda resposta deveria
+citar um romaneio, talhão, ou identificador de equipamento (contrato de
+citação no SKILL.md do Hermes). Se uma resposta não cita nada
+específico, vale perguntar de onde veio o número.
 
-**6. Watch for "recalled memories" instead of a tool call.** Claude Code has
-its own separate memory system (notes carried across conversations),
-independent of gbrain. An answer that mentions recalling memories with no
-tool call is answering from a cached summary of past conversations, not
-fresh data — worth catching, since memory can go stale.
+**4. Verifique no início de uma sessão** (uso interativo via Claude
+Code). Rode `/mcp` logo após abrir uma nova sessão e confirme que
+`farm-stats` aparece como conectado antes de confiar nele.
 
-## Known limitation: no SQL fallback, but it's not bulletproof
+## O que o gbrain ainda faz neste projeto
 
-`CLAUDE.md` in this repo bans direct SQL/psql against `pesagens` /
-`fretes_colheita` unconditionally — even for exact counts/totals/exhaustive
-searches, gbrain should be pushed harder (raised search limit, multiple
-queries) rather than bypassed. This is a **prose rule**, not a technical
-guardrail — it has been bypassed twice before being hardened to this
-unconditional form, and there's no enforced permission block behind it yet.
-If you notice SQL being used instead of gbrain, that's worth reporting; the
-next step discussed (not yet implemented) is a `settings.json` deny rule
-blocking Bash access to `psql`/`gbrain_dev` in this project.
+O gbrain continua conectado como servidor MCP separado, reservado para
+conteúdo genuinamente não estruturado que venha a existir no futuro
+(atas de reunião, contratos, relatórios em texto livre) — não para as
+três tabelas estruturadas que já existem hoje. Se algum dia isso mudar,
+esta seção precisa ser reescrita.
+
+## Limitação conhecida: sem fallback para SQL
+
+O CLAUDE.md deste repositório proíbe SQL/psql direto contra
+`pesagens`/`fretes_colheita`/`uso_equipamentos` de forma incondicional —
+mesmo para contagens/totais exatos, use as ferramentas do `farm-stats`
+(que já cobrem esses casos com precisão, ao contrário do gbrain antigo).
+`psql` via Bash é bloqueado também no nível de permissão
+(`.claude/settings.json`) como reforço estrutural, não só uma regra em
+texto.
