@@ -25,19 +25,6 @@ mcp_server/farm_stats.py  →  servidor MCP "farm-stats":
 Hermes / Claude Code (via MCP)
 ```
 
-O `gbrain` (`~/R.P. fazenda continetal/gbrain`) continua conectado como
-servidor MCP separado, mas **não** faz mais parte deste pipeline — as três
-tabelas acima são consultadas diretamente, sem passar por ele. Isso
-substitui um desenho anterior (linha do Postgres → página markdown →
-`gbrain import` → busca semântica) que o próprio `docs/AUDIT.md` mostrou
-pouco confiável para os tipos de pergunta mais comuns aqui (ID exato,
-agregados) e que exigia lembrar de sincronizar manualmente cada tabela
-nova — ver `docs/PROJECT_LOG.md` (entrada de 2026-07-10) para o histórico
-completo. `scripts/generate_gbrain_pages.py` fica no repositório só como
-referência, aposentado (aviso no topo do próprio arquivo). O gbrain segue
-reservado para conteúdo genuinamente não estruturado no futuro (atas,
-contratos) — veja CLAUDE.md para as regras de quando usar qual ferramenta.
-
 ## Estrutura
 
 - `data/` — exportações brutas de dados da fazenda (xlsx, csv)
