@@ -3,18 +3,22 @@
 # Como funciona 
 Exportações brutas (CSV/XLSX do sistema GSB da fazenda)
         ↓  scripts de carga (um por tipo de arquivo)
+        
 Postgres — banco gbrain_dev, três tabelas:
         pesagens            (400 linhas   — registros de pesagem/romaneio)
         fretes_colheita     (22 linhas    — frete e colheita por talhão)
         uso_equipamentos    (22.575 linhas — diário de uso de máquinas/equipamentos)
         ↓  consultado DIRETAMENTE (sem passo de conversão)
+        
 mcp_server/farm_stats.py — servidor MCP "farm-stats":
         17 ferramentas de consulta: busca exata, filtro, agregado, texto livre
         ↓
+        
 Hermes (agente de IA) — decide qual ferramenta usar, segue as regras da
         skill farm-telegram, faz uma segunda passada de verificação antes
         de responder
         ↓
+        
 Bot do Telegram — entrega a resposta final para o funcionário
 
 ## repositório
