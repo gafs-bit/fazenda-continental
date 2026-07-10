@@ -1,12 +1,5 @@
 # Fazenda Continental — Pipeline de Dados da Fazenda
 
-Dados brutos da fazenda + o pipeline de carga que alimenta o Postgres
-consultado diretamente pelas ferramentas MCP do `farm-stats`. Sucessor do
-repositório original `fazenda-continental-internship` — este aqui leva
-adiante apenas as peças essenciais (dados brutos, carregadores, ferramentas
-de consulta); o protótipo de busca local descontinuado (fastembed/
-sentence-transformers, tabela `documentos` separada) não foi trazido.
-
 ## Pipeline
 
 ```
